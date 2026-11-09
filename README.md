@@ -37,6 +37,8 @@ System.shellExecute("readme.txt");                  // Kirikiri's, on every plat
 | `copyImage(layer)` | puts the layer's picture on the clipboard, opaque, as PNG and BMP (Windows reads the BMP); true when SDL took it |
 | `clipboardHas(mimeType)` | whether the clipboard holds data of that type |
 | `frameLimit` | frames a second at most, 0 for no limit: a continuous handler waits out the rest of each frame. Not on the web, where the browser paces the frames (`frameLimitPossible` says so) |
+| `userFolder(name)` | one of the player's folders, a native path ending in a separator ("" where the system has none): `home`, `desktop`, `documents`, `downloads`, `music`, `pictures`, `publicshare`, `savedgames`, `screenshots`, `templates`, `videos` (SDL_GetUserFolder) |
+| `makeFolder(path)` | makes a folder (a native path) and any missing above it |
 | `lastError` | why the last call that returned false failed (also in the log) |
 
 ## Building

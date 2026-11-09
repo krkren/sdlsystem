@@ -41,6 +41,12 @@ enum : uint32_t {
 	EVENT_WINDOW_OCCLUDED = 0x216,
 };
 
+// SDL_Folder, for SDL_GetUserFolder
+enum Folder {
+	FOLDER_HOME, FOLDER_DESKTOP, FOLDER_DOCUMENTS, FOLDER_DOWNLOADS, FOLDER_MUSIC, FOLDER_PICTURES,
+	FOLDER_PUBLICSHARE, FOLDER_SAVEDGAMES, FOLDER_SCREENSHOTS, FOLDER_TEMPLATES, FOLDER_VIDEOS
+};
+
 enum : uint64_t {
 	WINDOW_OCCLUDED = 0x4,
 	WINDOW_HIDDEN = 0x8,
@@ -72,6 +78,9 @@ struct Api {
 	const char *(SDLSYS_CALL *GetError)(void) = nullptr;
 	const char *(SDLSYS_CALL *GetPlatform)(void) = nullptr;
 	int (SDLSYS_CALL *GetVersion)(void) = nullptr;
+	const char *(SDLSYS_CALL *GetUserFolder)(int folder) = nullptr;
+	// not "CreateDirectory": a macro of Windows' headers
+	bool (SDLSYS_CALL *MakeDirectory)(const char *path) = nullptr;
 
 	bool found = false;      ///< every function above was found
 	const char *where = "";  ///< where they were found, for the log

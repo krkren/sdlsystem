@@ -19,6 +19,8 @@ uint64_t SDL_GetTicksNS(void);
 const char *SDL_GetError(void);
 const char *SDL_GetPlatform(void);
 int SDL_GetVersion(void);
+const char *SDL_GetUserFolder(int folder);
+bool SDL_CreateDirectory(const char *path);
 }
 #elif defined(_WIN32)
 #include <windows.h>
@@ -94,6 +96,8 @@ Api load() {
 	a.GetError = &SDL_GetError;
 	a.GetPlatform = &SDL_GetPlatform;
 	a.GetVersion = &SDL_GetVersion;
+	a.GetUserFolder = &SDL_GetUserFolder;
+	a.MakeDirectory = &SDL_CreateDirectory;
 	a.found = true;
 	a.where = "the engine (linked in)";
 #else
@@ -111,6 +115,8 @@ Api load() {
 	all &= find(a.GetError, "SDL_GetError", where);
 	all &= find(a.GetPlatform, "SDL_GetPlatform", where);
 	all &= find(a.GetVersion, "SDL_GetVersion", where);
+	all &= find(a.GetUserFolder, "SDL_GetUserFolder", where);
+	all &= find(a.MakeDirectory, "SDL_CreateDirectory", where);
 	a.found = all;
 	a.where = all ? where : "nowhere";
 #endif

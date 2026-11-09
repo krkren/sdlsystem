@@ -29,6 +29,11 @@
 //   SDLSystem.clipboardHas(type) whether the clipboard holds data of that MIME type
 //   SDLSystem.frameLimit         frames a second at most (0: no limit); not on the web, where
 //                                the browser paces the frames
+//   SDLSystem.userFolder(name)   one of the player's folders, a native path ending in a separator
+//                                ("" where the system has none): home, desktop, documents,
+//                                downloads, music, pictures, publicshare, savedgames,
+//                                screenshots, templates, videos
+//   SDLSystem.makeFolder(path)   makes a folder (a native path) and any missing above it
 //   SDLSystem.lastError          why the last call that returned false failed
 //
 // SPDX-License-Identifier: 0BSD
@@ -419,6 +424,35 @@ public:
 		return true;
 	}
 
+	static ttstr userFolder(ttstr name) {
+		static const char *const names[] = { "home", "desktop", "documents", "downloads", "music", "pictures",
+		                                     "publicshare", "savedgames", "screenshots", "templates", "videos" };
+		const Api &a = api();
+		if (!a.found) return ttstr();
+		std::string n = toUtf8(name);
+		for (int k = 0; k < int(sizeof names / sizeof names[0]); k++)
+			if (n == names[k]) {
+				const char *p = a.GetUserFolder(k);
+				return p ? fromUtf8(p) : ttstr();
+			}
+		return ttstr();
+	}
+
+	static bool makeFolder(ttstr path) {
+		lastErrorText.clear();
+		const Api &a = api();
+		if (!a.found) {
+			fail("makeFolder: SDL's functions weren't found in the engine");
+			return false;
+		}
+		std::string p = toUtf8(path);
+		if (!a.MakeDirectory(p.c_str())) {
+			fail("makeFolder " + p + ": " + std::string(a.GetError()));
+			return false;
+		}
+		return true;
+	}
+
 	static bool clipboardHas(ttstr mime) {
 		const Api &a = api();
 		if (!a.found) return false;
@@ -474,6 +508,8 @@ NCB_REGISTER_CLASS(SDLSystem) {
 	NCB_METHOD_RAW_CALLBACK(takeEvents, &SDLSystem::takeEvents, TJS_STATICMEMBER);
 	NCB_METHOD(copyImage);
 	NCB_METHOD(clipboardHas);
+	NCB_METHOD(userFolder);
+	NCB_METHOD(makeFolder);
 }
 
 NCB_ATTACH_FUNCTION(shellExecute, System, shellExecute);
