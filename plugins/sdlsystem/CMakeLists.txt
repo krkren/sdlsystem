@@ -5,7 +5,7 @@ set(TPSTUB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../tp_stub CACHE PATH "Path to tp_stu
 include(${TPSTUB_DIR}/krkrz.cmake)
 
 # the gallery's Apple file builds only on iOS (#if), and is Objective-C++
-set(SDLSYSTEM_SOURCES main.cpp codec.cpp sdlapi.cpp spawn.cpp gallery_android.cpp gallery_none.cpp)
+set(SDLSYSTEM_SOURCES main.cpp codec.cpp sdlapi.cpp spawn.cpp gallery_android.cpp gallery_none.cpp watchdog.cpp)
 if(APPLE)
     enable_language(OBJCXX)
     list(APPEND SDLSYSTEM_SOURCES gallery_apple.mm)
@@ -18,6 +18,14 @@ if(APPLE)
 endif()
 if(IOS OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
     target_link_libraries(sdlsystem PRIVATE "-framework Photos" "-framework Foundation")
+endif()
+# the watchdog's thread (watchdog.cpp), and on Android its reports go to logcat
+if(NOT EMSCRIPTEN)
+    find_package(Threads REQUIRED)
+    target_link_libraries(sdlsystem PRIVATE Threads::Threads)
+endif()
+if(ANDROID)
+    target_link_libraries(sdlsystem PRIVATE log)
 endif()
 if(WIN32)
     target_link_libraries(sdlsystem PRIVATE shell32)

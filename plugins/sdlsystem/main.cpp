@@ -53,6 +53,18 @@
 //                                event "gallerysaved" or "galleryfailed" (takeEvents), with
 //                                galleryError saying why; false when it couldn't start
 //   SDLSystem.galleryError       why the last gallery save failed
+//   SDLSystem.watchdog(seconds, path = "")
+//                                watches the game's thread from a thread of its own: when
+//                                alive() hasn't come for that long (and the game isn't in the
+//                                background or minimized), a report goes to the system's log
+//                                (logcat, stderr) and to the file path (a native path): the last
+//                                note, and every thread's state and processor time (Linux,
+//                                Android); 0 stops it
+//   SDLSystem.alive(note = "")   the game's thread is running; note says where (in a report)
+//   SDLSystem.watchdogReport     the last report ("" without one)
+//   SDLSystem.prefFolder(org, app)
+//                                the folder SDL keeps an app's own files in (SDL_GetPrefPath:
+//                                where the engine's user:// is), a native path
 //   SDLSystem.lastError          why the last call that returned false failed
 //
 // SPDX-License-Identifier: 0BSD
@@ -63,6 +75,7 @@
 #include "gallery.h"
 #include "sdlapi.h"
 #include "spawn.h"
+#include "watchdog.h"
 
 #include <atomic>
 #include <mutex>
@@ -322,6 +335,9 @@ void *gameWindow() {
 std::mutex galleryLock;
 std::string galleryErrorText;
 
+// the watchdog doesn't count while the game is put away (its loop stops then)
+bool watchPaused() { return inBackground || minimized; }
+
 } // namespace
 
 // ------------------------------------------------------------------------
@@ -490,6 +506,32 @@ public:
 		return true;
 	}
 
+	// the watchdog (watchdog.cpp): seconds without alive() make a report
+	static tjs_error TJS_INTF_METHOD watchdog(tTJSVariant *result, tjs_int numparams, tTJSVariant **param,
+	                                          iTJSDispatch2 *) {
+		int seconds = numparams >= 1 && param[0]->Type() != tvtVoid ? (int)param[0]->AsInteger() : 0;
+		std::string path = numparams >= 2 && param[1]->Type() != tvtVoid ? toUtf8(ttstr(*param[1])) : std::string();
+		bool ok = seconds > 0 ? sdlsys::watchdogStart(seconds, path, &watchPaused) : (sdlsys::watchdogStop(), true);
+		if (result) *result = ok;
+		return TJS_S_OK;
+	}
+	static tjs_error TJS_INTF_METHOD alive(tTJSVariant *result, tjs_int numparams, tTJSVariant **param,
+	                                       iTJSDispatch2 *) {
+		sdlsys::watchdogAlive(numparams >= 1 && param[0]->Type() != tvtVoid ? toUtf8(ttstr(*param[0])) : std::string());
+		if (result) result->Clear();
+		return TJS_S_OK;
+	}
+	static ttstr getWatchdogReport() { return fromUtf8(sdlsys::watchdogLastReport().c_str()); }
+	static ttstr prefFolder(ttstr org, ttstr app) {
+		const Api &a = api();
+		if (!a.GetPrefPath || !a.Free) return ttstr();
+		char *p = a.GetPrefPath(toUtf8(org).c_str(), toUtf8(app).c_str());
+		if (!p) return ttstr();
+		ttstr r = fromUtf8(p);
+		a.Free(p);
+		return r;
+	}
+
 	static bool getKeyboard() { return api().keyboard; }
 	static bool getScreenKeyboard() { return api().keyboard && api().HasScreenKeyboardSupport(); }
 	static bool getTextInputActive() {
@@ -642,6 +684,10 @@ NCB_REGISTER_CLASS(SDLSystem) {
 	NCB_METHOD(clipboardHas);
 	NCB_METHOD(userFolder);
 	NCB_METHOD(makeFolder);
+	NCB_METHOD_RAW_CALLBACK(watchdog, &SDLSystem::watchdog, TJS_STATICMEMBER);
+	NCB_METHOD_RAW_CALLBACK(alive, &SDLSystem::alive, TJS_STATICMEMBER);
+	NCB_PROPERTY_RO(watchdogReport, getWatchdogReport);
+	NCB_METHOD(prefFolder);
 	NCB_PROPERTY_RO(keyboard, getKeyboard);
 	NCB_PROPERTY_RO(screenKeyboard, getScreenKeyboard);
 	NCB_PROPERTY_RO(textInputActive, getTextInputActive);
@@ -670,6 +716,7 @@ static void sdlsystemRegist() {
 }
 
 static void sdlsystemUnregist() {
+	sdlsys::watchdogStop(); // its thread goes before the library does
 	const Api &a = api();
 	if (watching && a.found) a.RemoveEventWatch(watch, nullptr);
 	watching = false;

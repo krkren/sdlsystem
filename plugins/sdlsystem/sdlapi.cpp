@@ -33,6 +33,7 @@ bool SDL_SetBooleanProperty(uint32_t props, const char *name, bool value);
 bool SDL_SetNumberProperty(uint32_t props, const char *name, int64_t value);
 void **SDL_GetWindows(int *count);
 void SDL_free(void *mem);
+char *SDL_GetPrefPath(const char *org, const char *app);
 }
 #elif defined(_WIN32)
 #include <windows.h>
@@ -125,6 +126,7 @@ Api load() {
 	a.GetWindows = &SDL_GetWindows;
 	a.Free = &SDL_free;
 	a.keyboard = true;
+	a.GetPrefPath = &SDL_GetPrefPath;
 #else
 	const char *where = "";
 	bool all = true;
@@ -159,6 +161,7 @@ Api load() {
 	kb &= find(a.GetWindows, "SDL_GetWindows", kwhere);
 	kb &= find(a.Free, "SDL_free", kwhere);
 	a.keyboard = kb;
+	find(a.GetPrefPath, "SDL_GetPrefPath", kwhere);
 #endif
 	return a;
 }

@@ -121,6 +121,8 @@ struct Api {
 	void **(SDLSYS_CALL *GetWindows)(int *count) = nullptr;
 	void (SDLSYS_CALL *Free)(void *mem) = nullptr;
 	bool keyboard = false;   ///< every keyboard function was found
+	// SDL_GetPrefPath (the folder the engine's user:// storage is in), freed with Free; optional
+	char *(SDLSYS_CALL *GetPrefPath)(const char *org, const char *app) = nullptr;
 };
 
 /// The functions, looked up once
