@@ -62,6 +62,8 @@
 //                                Android); 0 stops it
 //   SDLSystem.alive(note = "")   the game's thread is running; note says where (in a report)
 //   SDLSystem.watchdogReport     the last report ("" without one)
+//   SDLSystem.writeOctet(storage, octet)
+//                                writes the octet as it is to a storage that is a local file
 //   SDLSystem.prefFolder(org, app)
 //                                the folder SDL keeps an app's own files in (SDL_GetPrefPath:
 //                                where the engine's user:// is), a native path
@@ -78,6 +80,7 @@
 #include "watchdog.h"
 
 #include <atomic>
+#include <cstdio>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -522,6 +525,36 @@ public:
 		return TJS_S_OK;
 	}
 	static ttstr getWatchdogReport() { return fromUtf8(sdlsys::watchdogLastReport().c_str()); }
+	// an octet written as it is to a storage with a local file (Storages.saveOctet's stand-in in
+	// kagex's Porting.tjs); through the file's local name, never an engine stream, whose errors
+	// would be exceptions through this library's frames
+	static tjs_error TJS_INTF_METHOD writeOctet(tTJSVariant *result, tjs_int numparams, tTJSVariant **param,
+	                                            iTJSDispatch2 *) {
+		lastErrorText.clear();
+		if (result) *result = false;
+		if (numparams < 2 || param[1]->Type() != tvtOctet) {
+			fail("writeOctet: a storage name and an octet");
+			return TJS_S_OK;
+		}
+		ttstr name(*param[0]);
+		ttstr local = TVPGetLocallyAccessibleName(TVPNormalizeStorageName(name));
+		if (local.IsEmpty()) {
+			fail("writeOctet: " + toUtf8(name) + " isn't a local file");
+			return TJS_S_OK;
+		}
+		tTJSVariantOctet *o = param[1]->AsOctetNoAddRef();
+		std::string path = toUtf8(local);
+		FILE *f = std::fopen(path.c_str(), "wb");
+		if (!f) {
+			fail("writeOctet: can't write " + path);
+			return TJS_S_OK;
+		}
+		size_t len = o ? o->GetLength() : 0, done = len ? std::fwrite(o->GetData(), 1, len, f) : 0;
+		bool ok = std::fclose(f) == 0 && done == len;
+		if (!ok) fail("writeOctet: writing " + path + " failed");
+		if (result) *result = ok;
+		return TJS_S_OK;
+	}
 	static ttstr prefFolder(ttstr org, ttstr app) {
 		const Api &a = api();
 		if (!a.GetPrefPath || !a.Free) return ttstr();
@@ -688,6 +721,7 @@ NCB_REGISTER_CLASS(SDLSystem) {
 	NCB_METHOD_RAW_CALLBACK(alive, &SDLSystem::alive, TJS_STATICMEMBER);
 	NCB_PROPERTY_RO(watchdogReport, getWatchdogReport);
 	NCB_METHOD(prefFolder);
+	NCB_METHOD_RAW_CALLBACK(writeOctet, &SDLSystem::writeOctet, TJS_STATICMEMBER);
 	NCB_PROPERTY_RO(keyboard, getKeyboard);
 	NCB_PROPERTY_RO(screenKeyboard, getScreenKeyboard);
 	NCB_PROPERTY_RO(textInputActive, getTextInputActive);
