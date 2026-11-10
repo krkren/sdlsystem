@@ -21,6 +21,18 @@ const char *SDL_GetPlatform(void);
 int SDL_GetVersion(void);
 const char *SDL_GetUserFolder(int folder);
 bool SDL_CreateDirectory(const char *path);
+bool SDL_StartTextInputWithProperties(void *window, uint32_t props);
+bool SDL_StopTextInput(void *window);
+bool SDL_TextInputActive(void *window);
+bool SDL_SetTextInputArea(void *window, const sdlsys::Rect *rect, int cursor);
+bool SDL_HasScreenKeyboardSupport(void);
+bool SDL_ScreenKeyboardShown(void *window);
+uint32_t SDL_CreateProperties(void);
+void SDL_DestroyProperties(uint32_t props);
+bool SDL_SetBooleanProperty(uint32_t props, const char *name, bool value);
+bool SDL_SetNumberProperty(uint32_t props, const char *name, int64_t value);
+void **SDL_GetWindows(int *count);
+void SDL_free(void *mem);
 }
 #elif defined(_WIN32)
 #include <windows.h>
@@ -100,6 +112,19 @@ Api load() {
 	a.MakeDirectory = &SDL_CreateDirectory;
 	a.found = true;
 	a.where = "the engine (linked in)";
+	a.StartTextInputWithProperties = &SDL_StartTextInputWithProperties;
+	a.StopTextInput = &SDL_StopTextInput;
+	a.TextInputActive = &SDL_TextInputActive;
+	a.SetTextInputArea = &SDL_SetTextInputArea;
+	a.HasScreenKeyboardSupport = &SDL_HasScreenKeyboardSupport;
+	a.ScreenKeyboardShown = &SDL_ScreenKeyboardShown;
+	a.CreateProperties = &SDL_CreateProperties;
+	a.DestroyProperties = &SDL_DestroyProperties;
+	a.SetBooleanProperty = &SDL_SetBooleanProperty;
+	a.SetNumberProperty = &SDL_SetNumberProperty;
+	a.GetWindows = &SDL_GetWindows;
+	a.Free = &SDL_free;
+	a.keyboard = true;
 #else
 	const char *where = "";
 	bool all = true;
@@ -119,6 +144,21 @@ Api load() {
 	all &= find(a.MakeDirectory, "SDL_CreateDirectory", where);
 	a.found = all;
 	a.where = all ? where : "nowhere";
+	const char *kwhere = "";
+	bool kb = true;
+	kb &= find(a.StartTextInputWithProperties, "SDL_StartTextInputWithProperties", kwhere);
+	kb &= find(a.StopTextInput, "SDL_StopTextInput", kwhere);
+	kb &= find(a.TextInputActive, "SDL_TextInputActive", kwhere);
+	kb &= find(a.SetTextInputArea, "SDL_SetTextInputArea", kwhere);
+	kb &= find(a.HasScreenKeyboardSupport, "SDL_HasScreenKeyboardSupport", kwhere);
+	kb &= find(a.ScreenKeyboardShown, "SDL_ScreenKeyboardShown", kwhere);
+	kb &= find(a.CreateProperties, "SDL_CreateProperties", kwhere);
+	kb &= find(a.DestroyProperties, "SDL_DestroyProperties", kwhere);
+	kb &= find(a.SetBooleanProperty, "SDL_SetBooleanProperty", kwhere);
+	kb &= find(a.SetNumberProperty, "SDL_SetNumberProperty", kwhere);
+	kb &= find(a.GetWindows, "SDL_GetWindows", kwhere);
+	kb &= find(a.Free, "SDL_free", kwhere);
+	a.keyboard = kb;
 #endif
 	return a;
 }

@@ -7,7 +7,7 @@
 // (SDL3.dll, libSDL3.so.0, or the executable itself when SDL is linked into it).
 //
 // The declarations are SDL 3's own (SDL_events.h, SDL_video.h, SDL_clipboard.h, SDL_misc.h,
-// SDL_timer.h), written out here so the plugin builds without SDL's headers. SDL 3 keeps its
+// SDL_timer.h, SDL_keyboard.h, SDL_properties.h), written out here so the plugin builds without SDL's headers. SDL 3 keeps its
 // ABI within the major version.
 //
 // SPDX-License-Identifier: 0BSD
@@ -60,6 +60,27 @@ enum : uint64_t {
 #define SDLSYS_CALL
 #endif
 
+// SDL_Rect
+struct Rect {
+	int x, y, w, h;
+};
+
+// SDL_keyboard.h's text input properties, and Android's InputType flags for the last one
+#define SDLSYS_PROP_TEXTINPUT_TYPE "SDL.textinput.type"
+#define SDLSYS_PROP_TEXTINPUT_CAPITALIZATION "SDL.textinput.capitalization"
+#define SDLSYS_PROP_TEXTINPUT_AUTOCORRECT "SDL.textinput.autocorrect"
+#define SDLSYS_PROP_TEXTINPUT_MULTILINE "SDL.textinput.multiline"
+#define SDLSYS_PROP_TEXTINPUT_ANDROID_INPUTTYPE "SDL.textinput.android.inputtype"
+enum : int64_t {
+	TEXTINPUT_TYPE_TEXT = 0,
+	CAPITALIZE_NONE = 0,
+	CAPITALIZE_SENTENCES = 1,
+	ANDROID_TYPE_CLASS_TEXT = 0x1,
+	ANDROID_TYPE_TEXT_FLAG_CAP_SENTENCES = 0x4000,
+	ANDROID_TYPE_TEXT_FLAG_AUTO_CORRECT = 0x8000,
+	ANDROID_TYPE_TEXT_FLAG_MULTI_LINE = 0x20000,
+};
+
 typedef bool(SDLSYS_CALL *EventFilter)(void *userdata, Event *event);
 typedef const void *(SDLSYS_CALL *ClipboardDataCallback)(void *userdata, const char *mime_type, size_t *size);
 typedef void(SDLSYS_CALL *ClipboardCleanupCallback)(void *userdata);
@@ -84,6 +105,22 @@ struct Api {
 
 	bool found = false;      ///< every function above was found
 	const char *where = "";  ///< where they were found, for the log
+
+	// The keyboard (SDL_keyboard.h, SDL_properties.h): looked up apart, so an SDL without them
+	// leaves the rest working
+	bool (SDLSYS_CALL *StartTextInputWithProperties)(void *window, uint32_t props) = nullptr;
+	bool (SDLSYS_CALL *StopTextInput)(void *window) = nullptr;
+	bool (SDLSYS_CALL *TextInputActive)(void *window) = nullptr;
+	bool (SDLSYS_CALL *SetTextInputArea)(void *window, const Rect *rect, int cursor) = nullptr;
+	bool (SDLSYS_CALL *HasScreenKeyboardSupport)(void) = nullptr;
+	bool (SDLSYS_CALL *ScreenKeyboardShown)(void *window) = nullptr;
+	uint32_t (SDLSYS_CALL *CreateProperties)(void) = nullptr;
+	void (SDLSYS_CALL *DestroyProperties)(uint32_t props) = nullptr;
+	bool (SDLSYS_CALL *SetBooleanProperty)(uint32_t props, const char *name, bool value) = nullptr;
+	bool (SDLSYS_CALL *SetNumberProperty)(uint32_t props, const char *name, int64_t value) = nullptr;
+	void **(SDLSYS_CALL *GetWindows)(int *count) = nullptr;
+	void (SDLSYS_CALL *Free)(void *mem) = nullptr;
+	bool keyboard = false;   ///< every keyboard function was found
 };
 
 /// The functions, looked up once

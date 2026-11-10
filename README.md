@@ -32,13 +32,21 @@ System.shellExecute("readme.txt");                  // Kirikiri's, on every plat
 | `minimized` | whether the window is minimized |
 | `background` | whether the system has put the game in the background (phones, and a browser's hidden tab) |
 | `lowMemory` | how many times the system has warned that memory is low (Android, iOS) |
-| `takeEvents()` | the events since the last call, oldest first: `focus`, `blur`, `minimize`, `restore`, `show`, `hide`, `background`, `foreground`, `lowmemory`, `terminating` |
+| `takeEvents()` | the events since the last call, oldest first: `focus`, `blur`, `minimize`, `restore`, `show`, `hide`, `background`, `foreground`, `lowmemory`, `terminating`, `gallerysaved`, `galleryfailed` |
 | `onEvent` | a function called at once, on the engine's thread, with `background`, `lowmemory` or `terminating`: the system may stop the game as soon as it has told it, so a save has to be written there and then. An event given to it isn't in `takeEvents()` too. **It must catch its own exceptions**: one that came back through the plugin would unwind through its frames, which some engines' builds can't do |
 | `copyImage(layer)` | puts the layer's picture on the clipboard, opaque, as PNG and BMP (Windows reads the BMP); true when SDL took it |
 | `clipboardHas(mimeType)` | whether the clipboard holds data of that type |
 | `frameLimit` | frames a second at most, 0 for no limit: a continuous handler waits out the rest of each frame. Not on the web, where the browser paces the frames (`frameLimitPossible` says so) |
 | `userFolder(name)` | one of the player's folders, a native path ending in a separator ("" where the system has none): `home`, `desktop`, `documents`, `downloads`, `music`, `pictures`, `publicshare`, `savedgames`, `screenshots`, `templates`, `videos` (SDL_GetUserFolder) |
 | `makeFolder(path)` | makes a folder (a native path) and any missing above it |
+| `keyboard` | whether SDL's text input functions were found (the members below) |
+| `screenKeyboard` | whether the system has a keyboard on the screen (SDL_HasScreenKeyboardSupport) |
+| `startTextInput(multiline = false, x, y, w, h)` | starts SDL's text input on the game's window, so a phone's keyboard comes up: `multiline` asks for one whose Return makes a new line (Android's `TYPE_TEXT_FLAG_MULTI_LINE`, sentence capitals; SDL's multi-line property); `x, y, w, h` (the window's pixels) say where the field is, so the system keeps it in sight. The engine itself stops text input when the focus moves to a layer that takes none, so start it as the field takes the focus |
+| `stopTextInput()` | stops it, and the keyboard goes |
+| `textInputActive` | whether it's on |
+| `galleryPossible` | whether a picture can go to the phone's photo gallery: Android, and iOS when the app's `Info.plist` has `NSPhotoLibraryAddUsageDescription` |
+| `saveToGallery(layer, name, album = "")` | adds the layer's picture (made a PNG at once, so the layer can go) to the gallery as `name`: Android's MediaStore, in `Pictures/<album>`, from Android 10 (no permission needed); iOS's photo library, asking to add only (the player is asked the first time). The result comes later, as the event `gallerysaved` or `galleryfailed`; false when it couldn't start |
+| `galleryError` | why the last gallery save failed |
 | `lastError` | why the last call that returned false failed (also in the log) |
 
 ## Building

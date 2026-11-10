@@ -34,6 +34,25 @@
 //                                downloads, music, pictures, publicshare, savedgames,
 //                                screenshots, templates, videos
 //   SDLSystem.makeFolder(path)   makes a folder (a native path) and any missing above it
+//   SDLSystem.keyboard           whether SDL's keyboard functions were found (the four below)
+//   SDLSystem.screenKeyboard     whether the system shows a keyboard on the screen (phones,
+//                                tablets, Steam Deck): text input there opens it
+//   SDLSystem.startTextInput(multiline = false, x, y, w, h)
+//                                starts SDL's text input on the game's window, so the system's
+//                                keyboard comes up where it has one: multiline asks for one
+//                                whose Return makes a new line (Android's TYPE_TEXT_FLAG_MULTI_LINE)
+//                                and sentence capitals; x, y, w, h (window pixels) say where the
+//                                field is, so the system keeps it in sight. The engine stops it
+//                                again when the focus moves to a layer with another imeMode
+//   SDLSystem.stopTextInput()    stops it (and the keyboard goes)
+//   SDLSystem.textInputActive    whether it's on
+//   SDLSystem.galleryPossible    whether there's a photo gallery to save to (Android, iOS)
+//   SDLSystem.saveToGallery(layer, name, album = "")
+//                                adds the layer's picture to the gallery as a PNG named name
+//                                (Android: in Pictures/<album>); the result comes later, as the
+//                                event "gallerysaved" or "galleryfailed" (takeEvents), with
+//                                galleryError saying why; false when it couldn't start
+//   SDLSystem.galleryError       why the last gallery save failed
 //   SDLSystem.lastError          why the last call that returned false failed
 //
 // SPDX-License-Identifier: 0BSD
@@ -41,6 +60,7 @@
 #include "ncbind.hpp"
 
 #include "codec.h"
+#include "gallery.h"
 #include "sdlapi.h"
 #include "spawn.h"
 
@@ -285,6 +305,23 @@ bool getInt(iTJSDispatch2 *obj, const tjs_char *name, tjs_int64 &out) {
 	return true;
 }
 
+// The game's window: the one with the keyboard focus, else the first
+void *gameWindow() {
+	const Api &a = api();
+	void *w = a.GetKeyboardFocus ? a.GetKeyboardFocus() : nullptr;
+	if (w || !a.GetWindows) return w;
+	int n = 0;
+	void **list = a.GetWindows(&n);
+	if (list) {
+		if (n > 0) w = list[0];
+		a.Free(list);
+	}
+	return w;
+}
+
+std::mutex galleryLock;
+std::string galleryErrorText;
+
 } // namespace
 
 // ------------------------------------------------------------------------
@@ -453,6 +490,101 @@ public:
 		return true;
 	}
 
+	static bool getKeyboard() { return api().keyboard; }
+	static bool getScreenKeyboard() { return api().keyboard && api().HasScreenKeyboardSupport(); }
+	static bool getTextInputActive() {
+		const Api &a = api();
+		void *w = a.keyboard ? gameWindow() : nullptr;
+		return w && a.TextInputActive(w);
+	}
+
+	static tjs_error TJS_INTF_METHOD startTextInput(tTJSVariant *result, tjs_int numparams, tTJSVariant **param,
+	                                                iTJSDispatch2 *) {
+		lastErrorText.clear();
+		const Api &a = api();
+		void *w = a.keyboard ? gameWindow() : nullptr;
+		if (!w) {
+			fail(a.keyboard ? "startTextInput: no window" : "startTextInput: SDL's keyboard functions weren't found");
+			if (result) *result = false;
+			return TJS_S_OK;
+		}
+		bool multiline = numparams >= 1 && param[0]->Type() != tvtVoid && param[0]->AsInteger() != 0;
+		uint32_t props = a.CreateProperties();
+		a.SetNumberProperty(props, SDLSYS_PROP_TEXTINPUT_TYPE, TEXTINPUT_TYPE_TEXT);
+		a.SetNumberProperty(props, SDLSYS_PROP_TEXTINPUT_CAPITALIZATION, multiline ? CAPITALIZE_SENTENCES : CAPITALIZE_NONE);
+		a.SetBooleanProperty(props, SDLSYS_PROP_TEXTINPUT_AUTOCORRECT, multiline);
+		a.SetBooleanProperty(props, SDLSYS_PROP_TEXTINPUT_MULTILINE, multiline);
+		int64_t android = ANDROID_TYPE_CLASS_TEXT;
+		if (multiline) android |= ANDROID_TYPE_TEXT_FLAG_MULTI_LINE | ANDROID_TYPE_TEXT_FLAG_CAP_SENTENCES | ANDROID_TYPE_TEXT_FLAG_AUTO_CORRECT;
+		a.SetNumberProperty(props, SDLSYS_PROP_TEXTINPUT_ANDROID_INPUTTYPE, android);
+		if (numparams >= 5) {
+			Rect r = { int(param[1]->AsInteger()), int(param[2]->AsInteger()), int(param[3]->AsInteger()),
+			           int(param[4]->AsInteger()) };
+			if (r.w > 0 && r.h > 0) a.SetTextInputArea(w, &r, 0);
+		}
+		bool ok = a.StartTextInputWithProperties(w, props);
+		a.DestroyProperties(props);
+		if (!ok) fail(std::string("startTextInput: ") + a.GetError());
+		if (result) *result = ok;
+		return TJS_S_OK;
+	}
+
+	static bool stopTextInput() {
+		lastErrorText.clear();
+		const Api &a = api();
+		void *w = a.keyboard ? gameWindow() : nullptr;
+		if (!w) return false;
+		return a.StopTextInput(w);
+	}
+
+	static bool getGalleryPossible() { return galleryPossible(); }
+	static ttstr getGalleryError() {
+		std::lock_guard<std::mutex> hold(galleryLock);
+		return fromUtf8(galleryErrorText.c_str());
+	}
+
+	static tjs_error TJS_INTF_METHOD saveToGallery(tTJSVariant *result, tjs_int numparams, tTJSVariant **param,
+	                                               iTJSDispatch2 *) {
+		lastErrorText.clear();
+		if (result) *result = false;
+		if (numparams < 2 || param[0]->Type() != tvtObject || !param[0]->AsObjectNoAddRef()) {
+			fail("saveToGallery: a layer and a name");
+			return TJS_S_OK;
+		}
+		iTJSDispatch2 *obj = param[0]->AsObjectNoAddRef();
+		tjs_int64 buffer = 0, pitch = 0, width = 0, height = 0;
+		if (!getInt(obj, TJS_W("imageWidth"), width) || !getInt(obj, TJS_W("imageHeight"), height) ||
+		    !getInt(obj, TJS_W("mainImageBufferPitch"), pitch) || !getInt(obj, TJS_W("mainImageBuffer"), buffer) ||
+		    buffer == 0 || width <= 0 || height <= 0) {
+			fail("saveToGallery: the layer has no picture");
+			return TJS_S_OK;
+		}
+		std::string name = toUtf8(ttstr(*param[1]));
+		if (name.empty()) name = "screenshot.png";
+		std::string album = numparams >= 3 && param[2]->Type() != tvtVoid ? toUtf8(ttstr(*param[2])) : std::string();
+		const uint8_t *px = reinterpret_cast<const uint8_t *>(static_cast<intptr_t>(buffer));
+		std::vector<uint8_t> png = encodePng(px, int(width), int(height), long(pitch));
+		std::string why;
+		bool started = gallerySave(png, name, album,
+		                           [](bool ok, const std::string &err) {
+			                           {
+				                           std::lock_guard<std::mutex> hold(galleryLock);
+				                           galleryErrorText = ok ? std::string() : err;
+			                           }
+			                           // (no TVPAddLog: on iOS this runs on another thread; the
+			                           // script reads galleryError as the event comes)
+			                           note(ok ? "gallerysaved" : "galleryfailed", false);
+		                           },
+		                           why);
+		if (!started) {
+			fail("saveToGallery: " + why);
+			std::lock_guard<std::mutex> hold(galleryLock);
+			galleryErrorText = why;
+		}
+		if (result) *result = started;
+		return TJS_S_OK;
+	}
+
 	static bool clipboardHas(ttstr mime) {
 		const Api &a = api();
 		if (!a.found) return false;
@@ -510,6 +642,14 @@ NCB_REGISTER_CLASS(SDLSystem) {
 	NCB_METHOD(clipboardHas);
 	NCB_METHOD(userFolder);
 	NCB_METHOD(makeFolder);
+	NCB_PROPERTY_RO(keyboard, getKeyboard);
+	NCB_PROPERTY_RO(screenKeyboard, getScreenKeyboard);
+	NCB_PROPERTY_RO(textInputActive, getTextInputActive);
+	NCB_METHOD_RAW_CALLBACK(startTextInput, &SDLSystem::startTextInput, TJS_STATICMEMBER);
+	NCB_METHOD(stopTextInput);
+	NCB_PROPERTY_RO(galleryPossible, getGalleryPossible);
+	NCB_PROPERTY_RO(galleryError, getGalleryError);
+	NCB_METHOD_RAW_CALLBACK(saveToGallery, &SDLSystem::saveToGallery, TJS_STATICMEMBER);
 }
 
 NCB_ATTACH_FUNCTION(shellExecute, System, shellExecute);
