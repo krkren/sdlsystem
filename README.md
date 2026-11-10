@@ -50,6 +50,7 @@ System.shellExecute("readme.txt");                  // Kirikiri's, on every plat
 | `watchdog(seconds, path = "")` | watches the game's thread from a thread of its own: when `alive()` hasn't come for that long (and the game isn't in the background or minimized), it writes a report to the system's log (logcat on Android, stderr elsewhere) and to the file `path` (a native path), once per standstill: the last note, and on Linux and Android every thread of the process with its state, processor time over half a second and the kernel function it waits in, which tells a thread busy in a loop from one blocked on a lock. 0 stops it |
 | `alive(note = "")` | the game's thread is running; `note` says where (shown in a report) |
 | `watchdogReport` | the last report, "" without one |
+| `writeOctet(storage, octet)` | writes the octet as it is to a storage that is a local file (not `user://` on a phone); false when it can't |
 | `prefFolder(org, app)` | the folder SDL keeps an app's own files in (`SDL_GetPrefPath`: where the engine's `user://` storage is), a native path |
 | `lastError` | why the last call that returned false failed (also in the log) |
 
